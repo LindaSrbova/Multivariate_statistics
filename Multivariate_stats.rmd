@@ -1,0 +1,112 @@
+library(dplyr)
+library(GGally)
+library(corrgram)
+
+
+#loading data
+df <- read.csv("C:/Users/srboval1/OneDrive - Aalto University/Instru/Datafiles/Exp1t.csv")
+
+#selecting only incubation time 144h
+subset_df <- subset(df, incubation_time == 144)
+
+analysis_df <- subset(df, select = c(cell_line,material, area, perimeter, roundness, aspect_ratio))
+
+#scaling function
+min_max_scale <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+
+#Scaling of columns material, area, perimeter, roundness, aspect ratio
+cols_to_scale<- c(2:6) 
+scaled_cols <- apply(analysis_df[,cols_to_scale], 2, min_max_scale) #scaling across columns
+analysis_df[, cols_to_scale] <- scaled_cols #updating the df with the scaled values
+head(analysis_df)
+
+
+# Specify the columns for pairwise plot and columns for defining color and flier shape
+pairwise_cols <- c("materials", "area", "perimeter", "roundness", "aspect_ratio")  # Columns for pairwise plot
+color_column <- "cell_line"  # Column for defining color
+# Column for defining flier shape
+color_palette <- c("black", "red", "blue")  # Define a color palette
+
+# Save the plot as a JPEG file with a black background
+jpeg("C:/Users/srboval1/Time_Series_Instru/TimeSeriesAnalysis/pairwise_plot.jpg", 
+     width = 800, height = 600, units = "px", quality = 100, bg = "white")
+
+# Create the pairwise plot using pairs() function
+pairs(analysis_df, 
+      col = color_palette[analysis_df[, color_column]],
+      upper.panel = NULL, gap = 1, cex= 0.85)
+
+# Close the JPEG device
+dev.off()
+
+head(analysis_df)
+selected_cols <- analysis_df[, c("material","area", "perimeter", "roundness","aspect_ratio")]
+head(selected_cols)
+cov_regular <- cov(selected_cols)
+#stimate the multivariate location and scatter using the Minimum Covariance Determinant (MCD) method,
+cov_mcd <- robustbase::covMcd(selected_cols, alpha = 0.5)
+
+
+corrgram(selected_cols, upper.panel = NULL) #correlation matrix as a heatmap
+cor_matrix <- cor(analysis_df)
+print(round(cor_matrix, 2))
+write.table(round(cor_matrix, 2), "C:/Users/srboval1/Time_Series_Instru/TimeSeriesAnalysis/correlation_matrix.csv", sep = ",", quote = FALSE)
+
+
+class(selected_cols)
+
+cov_regular #Sample covariance
+cov_mcd$cov #MCD scatter estimate
+cov_mcd$cov - cov_regular #difference between the two
+
+
+
+
+#PCA
+df_pca <- princomp(selected_cols, cor = TRUE) # PCA with the correlation matrix
+
+#Plot for cumulative variance
+vars <- decat_pca$sdev^2
+var_prop <- vars / sum(vars)
+var_prop_cum <- cumsum(var_prop)
+plot(var_prop_cum, type = "b", pch = 21, lty = 3, bg = "red", cex = 2,
+ylim = c(0, 1), xlab = "Principal component",
+ylab = "Cumulative proportion of variance explained",
+xaxt = "n", yaxt = "n")
+
+
+
+#PCA plot
+pc12 <- df_pca$scores[, 1:2]
+load12 <- df_pca$loadings[, 1:2]
+color_variable <- analysis_df$cell_line
+unique_color_values <- unique(color_variable)
+custom_colors <- c("red", "blue", "orange")
+x_limits <- c(-8, 8)
+y_limits <- c(-3,3) 
+
+pc_axis <- c(-max(abs(pc12)), max(abs(pc12)))
+ld_axis <- c(-0.8, 0.8)
+plot(pc12, col = custom_colors[color_variable], bg = custom_colors[color_variable],xlim = x_limits, ylim = y_limits, pch = 21, cex = 0.25,
+xlab = paste0("PC 1 (", round(100 * var_prop[1], 2), "%)"),
+ylab = paste0("PC 2 (", round(100 * var_prop[2], 2), "%)"))
+par(new = TRUE)
+plot(load12, axes = FALSE, type = "n", xlab = "", ylab = "", xlim = ld_axis,
+ylim = ld_axis)
+axis(3, col = 2)
+axis(4, col = 2)
+arrows(0, 0, load12[, 1], load12[, 2], length = 0.1, col = 2)
+text(load12[, 1], load12[, 2], rownames(load12), pos = 3)
+abline(h = 0, lty = 3)
+abline(v = 0, lty = 3)
+
+
+legend("bottomright", legend = c('MCF10A','MCF10A.DCIS.COM','MCF10AT'), fill = custom_colors, cex=0.8)
+
+
+
+
+
+
